@@ -1,0 +1,5 @@
+Target_situations	TS_tag	TS_Activity	TS_HumanAction_YN	TS_HumanAction_ID	TS_Ventilation	TS_PMS	TS_VOC
+1	Normal	clean air, a person sleeping or studying or resting	No	Human_respiration	No	No	No
+2	Preparing meals	cooking meat or pasta, fried vegetables. One or two people in the room, forced air circulation	Yes	Cooking	Yes	Yes	No
+3	Presence of smoke	burning paper and wood for a short period of time in a room with closed windows and doors	Yes	Burning	No	Yes	Yes
+4	Cleaning	use of spray and liquid detergents with ammonia and / or alcohol. Forced air circulation can be activated or deactivate	Yes	Ammonia_Alcohol	Mixed	Yes	Yes

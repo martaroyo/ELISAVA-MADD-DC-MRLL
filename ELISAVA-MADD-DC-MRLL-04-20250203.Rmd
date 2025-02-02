@@ -1,0 +1,400 @@
+---
+title: "ELISAVA MADD Data Collection MRLL 04"
+author: "Marta Royo-Llonch"
+date: "Feb 3rd, 2025"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+#options for Rmarkdown to run smoothly in our document
+knitr::opts_chunk$set(echo = TRUE,message=F,warning=F,eval=T,results="show")
+#path to our working directory, change it to the directory where you have this file stored
+setwd("/Users/martaroyo/Dropbox/ELISAVA_MADD/2025/ELISAVA-MADD-DC-MRLL-04/")
+```
+
+# Introduction  
+
+This is an example on how to approach data analysis in R for MADD Data Collection students. We are working with an air quality dataset published by Ennio Gambi (2020) in [Mendeley datasets](https://data.mendeley.com/datasets/kn3x9rz3kd/1). This is the intro provided by the author:  
+
+*The variation in indoor gas concentration over time is monitored and data is stored in order to use this information to evaluate the type of activity carried out in the room. Thanks to the use of artificial intelligence, a quantitative approach in determining the gas concentration was avoided, which would have required careful calibration of the sensors. The dataset contains the values acquired by an array of 6 low cost sensors in successive instants of time, and the stored values are associated with the particular action that generated them. Through an appropriate data processing, based on machine learning algorithms, after an initial training phase it is possible to recognize the actions that are carried out inside the home.*  
+
+The dataset's purpose differs from ours but we can use it lightly to understand the dynamics of doing data analysis in R.  
+
+To work in an organized manner, our working directory `MADD_DC_04` contains the following structure:  
+
+* this coding file `MADD_DC_MRLL_04_20250203.Rmd` 
+* `data` directory, with all the datasets we want to use in our analysis  
+* `output` directory, where we will save processed data and plots  
+
+Remember to adapt the path of your working directory in `line 12` of this file, inside the `setwd()` command.  
+
+## 0. Loading packages/libraries  
+
+R language contains packages (or libraries) with customised functions that let us do certain actions with ease. In this case, we will use `tidyverse` for coding functions. Plots will be done with package `ggplot2` that is embedded within `tidyverse`. The package `knitr` is essential to render this document into `html` format.   
+
+**IMPORTANT:** if it's the first time you are using R studio you will need to install the packages before loading them. You can do that typing `install.packages("knitr")` and `install.packages("tidyverse")` in the Console window (bottom-left).  
+
+Once you have installed the packages, proceed with loading them:  
+
+```{r message=FALSE,warning=FALSE}
+library(knitr)
+library(tidyverse)
+``` 
+
+## 1. Loading the data  
+
+We have downloaded our dataset in `comma separated values, csv` format from [kaggle](https://www.kaggle.com/datasets/saurabhshahane/adl-classification?resource=download). Remember to store this dataset into your `data` directory within the `MADD_DC_04` directory.  
+
+Important info about the dataset structure:  
+
+*Each sample is made up of 7 values; the first six values are the sensor outputs, while the last is the index of the action that generated the values acquired by the sensors. The four different situations are associated with a fairly different composition of the air, taking into account that any activity produces chemical substances due, that is, to human respiration, to the exhalations of metabolic processes, to the release of volatiles by combustion and / or oxidation, and evaporation of household detergents.*  
+
+Before loading we can preview our dataset to check if it includes column headers (in apps like TextEdit, Terminal, Excel, etc). In this case it does not include column titles so we make sure to load the dataset specifying it using `header=FALSE`:  
+
+```{r}
+data <- read.csv("data/dataset.csv",header=FALSE) 
+head(data)
+```
+In the description of the dataset, the author explains the dimensions (number of columns and samples/rows) of the dataset. It is the first thing we need to check when we load our dataset. It should contain 7 columns and 1845 rows:  
+
+```{r}
+str(data)
+```
+The function `str()` allows us to see the dimensions and the type of variables within our dataset. In data analysis, `variables` stand for columns, and can be categorised into different typologies. In our case, all the loaded variables are `integers` or `int`.  
+## 2. Setting up our working dataset  
+
+We need to arrange our dataset for further analyses, like assigning column headers and understanding the meaning of the values. The author gives us more detailed info to understand the data and metadata that we are using:
+
+_The presence of chemicals in the air is determined through a series of electrochemical gas sensors that have been selected based on the stated technical specifications on the ability to detect classes of compounds. The sensor set can be grouped into two main categories:_  
+
+* _MQ sensors (MQ2, MQ9, MQ135, MQ137, MQ138) which have great sensitivity, low latency and low cost; each sensor can respond to different gases;_  
+* _Analog CO2 gas sensor (MG-811) which has excellent sensitivity to carbon dioxide and is scarcely affected by the temperature and humidity of the air._  
+
+_The dataset contains 1845 collected samples describing 4 target situations:_  
+
+* _1 - Normal situation - Activity: clean air, a person sleeping or studying or resting - Samples: 595_  
+* _2 - Preparing meals - Activities: cooking meat or pasta, fried vegetables. One or two people in the room, forced air circulation - Samples: 515_  
+* _3 - Presence of smoke - Activity: burning paper and wood for a short period of time in a room with closed windows and doors - Example: 195_  
+* _4 - Cleaning - Activity: use of spray and liquid detergents with ammonia and / or alcohol. Forced air circulation can be activated or deactivated - Samples: 540_  
+
+Now we can assign column headers:  
+
+```{r}
+#strategy 01 using base R language 
+#colnames(data) <- c("MQ2","MQ9","MQ135","MQ137","MQ138","MG811","Target_situations")
+
+#strategy 02 using tidyverse
+data <- data %>%
+                rename(MQ2=V1,
+                       MQ9=V2,
+                       MQ135=V3,
+                       MQ137=V4,
+                       MQ138=V5,
+                       MG811=V6,
+                       Target_situations=V7)
+
+##it does not make sense that different situations are numbers and not categories, let's transform integers to factors
+data <- data %>%
+                mutate(Target_situations=factor(Target_situations))
+head(data)
+```
+We still need to translate the target situations into metadata that is useful for us in our analysis stream. To do so, we are joining our nice metadata file (that we have previously prepared considering the information of situations 1-4 provided by the author) to our dataset. In order to join 2 data tables (or `data.frame` in R), we need them to share one common column (or `variable` in R).    
+
+Let's first load the metadata file:  
+
+```{r}
+metadata <- read.table("data/MADD_DC_04_20250203_Metadata.txt",
+                       header=TRUE, #our file contained headers  
+                       sep="\t", #the field separator in this file is tab or \t
+                       stringsAsFactors=TRUE) #our text/character values are transformed into factors
+
+metadata$Target_situations <- as.factor(metadata$Target_situations)#it does not make sense that different situations are numbers
+
+str(metadata)
+```
+Now our metadata contains an `integer` column named `Target_situations` that is shared with the `data` object. This `Target_situations` variable is an `integer` in both `data.frame` and will be used for joining. Moreover, our metadata contains other variables that define each `Target_situation` using text. We are transforming them to factor to easen up our analysis. You can learn more about `chr`, `int`, `factor` looking up **R variable types**.  
+
+Let's join our data and metadata objects with function `left_join`:  
+
+```{r}
+working.data <- data %>%
+                left_join(metadata,
+                          by="Target_situations")
+
+str(working.data)
+```
+
+## 3.Data reshaping  
+
+We have other important information related to our sensors: we know that 6 of them are low cost (those with suffix `MQ`) and one of them is our reference (suffix `MG`). We can add this information as a variable in our working dataset, but this requires a previous step named **Reshaping** (more info [here](https://tavareshugo.github.io/r-intro-tidyverse-gapminder/09-reshaping/index.html)).  
+
+Transforming wide datasets to long datasets helps us grouping in analyses and visualizations. We had a datast with as many columns as sensors and then activity information for each reading. In this case, each row was a moment in time measured by 7 sensors in an environmental context (activity information). By making it longer now each row belongs to a single CO2 concentration that can be assigned to a certain sensor and its environmental context. If we transform wide to long directly, we will lose an implicit variable that might be important later on = the time of sampling. We don't have a specific timestamp but in our original dataset we know that all CO2 values in one row were measeured at the same time. We can assign the row number to a variable named `Sampling_event` and then transform the dataset to a longer version.  
+
+```{r}
+working.data.long <- working.data %>%
+                          #reordering columns
+                          rownames_to_column(var="Sampling_event")%>%
+                          mutate(Sampling_event=as.numeric(Sampling_event))%>%
+                          #reshaping
+                          pivot_longer(cols = c("MQ2", "MQ9", "MQ135", "MQ137", "MQ138", "MG811"),
+                                       names_to = "Sensor",
+                                       values_to = "Reading")%>% 
+                          #new variable based on condition
+                          mutate(Sensor_type=ifelse(grepl("MQ",Sensor),"LowCost","Reference"))%>%
+                          #reordering columns
+                          select(Sampling_event,Sensor,Sensor_type,Reading,everything())
+
+str(working.data.long)
+```
+## 4.Data analysis  
+
+In this section we perform various analyses and visualizations to explore our air quality data. We start by summarising the sensor readings by grouping according to sensor type and the activity (or situation) during which the readings were recorded. Then we create different plots to visualise temporal trends, distributions, and differences between the low???cost and reference sensors.
+
+### 4.1 Summarising sensor readings
+
+We start by calculating basic statistics for our sensor readings across different activities:
+
+We first group the data by two variables: `Sensor_type` (i.e., LowCost or Reference) and `Target_situations` (the code for each activity). Then, we summarise the readings by calculating the mean, standard deviation, and median CO??? values for each group. Finally, we ungroup the data so that subsequent operations are not limited by these groupings. 
+
+The `group_by` function allows us to analyze patterns separately for each sensor category and activity combination. This helps identify which activities produce the most variable sensor responses.
+
+This step helps us to compare sensor performance across different activities.   
+
+```{r}
+working.data.long %>%
+        group_by(Sensor_type,Target_situations)%>%
+        summarise(Mean_CO2=mean(Reading),
+                  SD_CO2=sd(Reading),
+                  Median_CO2=median(Reading))%>%
+        ungroup()
+```
+
+### 4.2 Time Series Visualization  
+
+This code block creates a time series plot for CO??? readings, with different colors representing activity types. The plot reveals how different activities create distinct sensor response patterns over time.    
+
+* `geom_line()` draws a transparent line connecting the readings (using an alpha of 0.3) to show overall trends over the sampling events.  
+*  `geom_point()` adds individual points to highlight each observation, with colors representing the activity type (TS_tag).  
+* The `labs()` function is used to add a title, subtitle, and axis labels.  
+* We use `theme_minimal()` for a clean look and adjust the legend???s position.  
+* Finally, `facet_wrap()` splits the plot by Sensor (each sensor gets its own panel arranged in a single column), and the scales = "free_y" argument lets each sensor???s plot have its own y-axis scale.
+
+```{r fig.width=10, fig.height=10}
+working.data.long %>%
+        ggplot()+
+                geom_line(aes(x=Sampling_event,
+                                 y=Reading),
+                           alpha=0.3)+
+                geom_point(aes(x=Sampling_event,
+                                 y=Reading,
+                                 group=interaction(TS_tag,Sensor),
+                                 col=TS_tag),
+                           alpha=0.7)+
+                labs(title = "CO2 over time",
+                       subtitle = "Faceted by Sensor",
+                       x = "Time",
+                       y = "CO2 concentration",
+                       color = "Activity Type") +
+                theme_minimal()+
+                theme(legend.position = "top")+
+                facet_wrap(vars(Sensor),ncol=1,scales="free_y")
+
+# ggsave("output/Co2_time_series_by_activity.pdf",
+#        dpi=150,width=200,height=400,
+#        units="mm",
+#        device=cairo_pdf)
+```
+
+### 4.3 Boxplots: Sensor readings by activity type (grouped by sensor type)  
+
+In this visualization, we compare the distribution of sensor readings across different activities. This boxplot comparison helps us:
+
+* Assess measurement ranges between sensor types  
+* Identify activity-specific response patterns  
+* Compare measurement variability (box height)
+
+The faceting separates LowCost and Reference sensors for clearer comparison. Notice how Reference sensors (MG811) show tighter interquartile ranges, suggesting more consistent measurements. 
+
+Regarding the code:
+
+* `geom_boxplot()` creates boxplots for each activity type (`TS_tag`), grouped by sensor type (using `interaction(TS_tag, Sensor_type)`), and colors them by `Sensor_type`.  
+* `facet_wrap(vars(Sensor_type))` creates separate panels for low-cost and reference sensors, making it easier to compare the statistical summaries (such as medians and quartiles) between the two sensor categories.  
+
+```{r fig.width=8}
+working.data.long %>%
+        ggplot()+
+                geom_boxplot(aes(x=TS_tag,
+                                 y=Reading,
+                                 group=interaction(TS_tag,Sensor_type),
+                                 fill=Sensor_type))+
+                labs(title = "LowCost vs Reference sensor stats in different activies",
+                       subtitle = "Faceted by Sensor Type",
+                       x = "Activity Type",
+                       y = "Sensor Reading",
+                       fill = "Sensory type") +
+                theme_minimal()+
+                facet_wrap(vars(Sensor_type))
+
+# ggsave("output/Boxplot_sensortype_by_activity.pdf",
+#        dpi=150,width=200,height=100,
+#        units="mm",
+#        device=cairo_pdf)
+```
+
+### 4.4 Combining jitter and boxplots  
+
+This plot enhances the previous boxplot by adding a jitter layer:  
+
+* `geom_jitter()` scatters the data points, which helps to reveal the density and variation within each group. The transparency (alpha = 0.3) makes overlapping points easier to interpret.  
+* A boxplot is overlaid using `geom_boxplot()` (with alpha = 0 so only the outline appears) to provide a summary of the distribution.  
+* Grouping and faceting remain the same to maintain the comparison between sensor types, while the legend is removed for a cleaner look.  
+
+```{r fig.width=8}
+working.data.long %>%
+        ggplot()+
+                geom_jitter(aes(x=TS_tag,
+                                 y=Reading,
+                                 group=interaction(TS_tag,Sensor_type),
+                                 col=Sensor_type),
+                           alpha=0.3)+
+                geom_boxplot(aes(x=TS_tag,
+                                 y=Reading,
+                                 group=interaction(TS_tag,Sensor_type)),
+                             alpha=0)+
+                labs(title = "LowCost vs Reference sensor stats in different activies",
+                       subtitle = "Faceted by Sensor Type",
+                       x = "Activity Type",
+                       y = "Sensor Reading",
+                       fill = "Sensory type") +
+                theme_minimal()+
+                facet_wrap(vars(Sensor_type))+
+                theme(legend.position = "none")
+
+# ggsave("output/Boxplot_dots_sensortype_by_activity.pdf",
+#        dpi=150,width=200,height=100,
+#        units="mm",
+#        device=cairo_pdf)
+```
+
+### 4.5 Comparing sensor statistics: Calculating differences between sensor types  
+
+#### 4.5.1 Without metadata  
+
+In this code:
+
+* We group the data by sensor type and activity (TS_tag) and compute summary statistics.
+The pivot_wider() function reshapes the data so that the summary statistics for each sensor type become separate columns.  
+* We then mutate the dataset to calculate the differences in mean and median readings between the Reference and LowCost sensors. These new columns (`Diff_Mean_RefLC` and `Diff_Median_RefLC`) indicate how much the sensor readings differ on average for each activity.  
+* Finally, we select only the activity and difference columns for a concise output.  
+
+#### 4.5.2 Adding metadata to the differences  
+
+This code is similar to the previous block but adds an extra step:  
+
+* After calculating the differences between sensor types, we perform a left join with the metadata. This enriches our table by incorporating additional descriptive information about each activity (e.g., textual descriptions), making the results easier to interpret.  
+
+```{r}
+working.data.long %>%
+        group_by(Sensor_type,TS_tag)%>%
+        summarise(Mean_CO2=mean(Reading),
+                  SD_CO2=sd(Reading),
+                  Median_CO2=median(Reading))%>%
+        ungroup()%>%
+        pivot_wider(names_from="Sensor_type",values_from=c("Mean_CO2","SD_CO2","Median_CO2"))%>%
+        mutate(Diff_Mean_RefLC=Mean_CO2_Reference-Mean_CO2_LowCost,
+               Diff_Median_RefLC=Median_CO2_Reference-Median_CO2_LowCost)%>%
+        select(TS_tag,starts_with("Diff"))
+```
+
+```{r}
+working.data.long %>%
+        group_by(Sensor_type,TS_tag)%>%
+        summarise(Mean_CO2=mean(Reading),
+                  SD_CO2=sd(Reading),
+                  Median_CO2=median(Reading))%>%
+        ungroup()%>%
+        pivot_wider(names_from="Sensor_type",values_from=c("Mean_CO2","SD_CO2","Median_CO2"))%>%
+        mutate(Diff_Mean_RefLC=Mean_CO2_Reference-Mean_CO2_LowCost,
+               Diff_Median_RefLC=Median_CO2_Reference-Median_CO2_LowCost)%>%
+        select(TS_tag,starts_with("Diff"))%>%
+        left_join(metadata,
+                  by="TS_tag")
+```
+
+### 4.6 Density plots showing LowCost sensor distributions
+
+```{r fig.width=10}
+working.data.long%>%
+        filter(Sensor_type=="LowCost")%>%
+                ggplot() +
+                  geom_density(aes(x = Reading, 
+                                   fill = TS_tag),
+                               alpha = 0.7) +
+                  facet_grid(rows=vars(TS_tag),cols=vars(Sensor)) +
+                  labs(title = "Sensor Reading Distributions by Activity",
+                       x = "Sensor Reading",
+                       y = "Density",
+                       fill = "Activity Type") +
+                  theme_minimal()+
+                  theme(legend.position="none")
+
+# ggsave("output/Density_sensor_by_activity.pdf",
+#        dpi=150,width=200,height=180,
+#        units="mm",
+#        device=cairo_pdf)
+```
+
+Let's visualize the same information collapsing activities for each LowCost sensors:
+
+```{r fig.width=10, fig.height=3}
+working.data.long%>%
+        filter(Sensor_type=="LowCost")%>%
+                ggplot() +
+                  geom_density(aes(x = Reading, 
+                                   fill = TS_tag),
+                               alpha = 0.7) +
+                  facet_wrap(vars(Sensor),ncol=5) +
+                  labs(title = "Sensor Reading Distributions by Activity",
+                       x = "Sensor Reading",
+                       y = "Density",
+                       fill = "Activity Type") +
+                  theme_minimal()
+
+# ggsave("output/Density_sensor_by_activity_collapsed.pdf",
+#        dpi=150,width=200,height=75,
+#        units="mm",
+#        device=cairo_pdf)
+```
+
+### 4.7 Ventilation Impact Analysis
+
+```{r fig.width=10, fig.height=3}
+working.data.long%>%
+        filter(Sensor=="MQ135")%>%
+                ggplot() +
+                  geom_density(aes(x = Reading, fill=TS_Ventilation),
+                               alpha = 0.7) +
+                  facet_grid(cols=vars(TS_Ventilation),rows=vars(TS_tag)) +
+                  labs(title = "Sensor Reading Distributions by Activity",
+                       x = "Sensor Reading",
+                       y = "Density",
+                       fill = "Activity Type") +
+                  theme_minimal()+
+                  theme(legend.position="none")
+
+# ggsave("output/Density_ventilation_by_activity_collapsed.pdf",
+#        dpi=150,width=200,height=75,
+#        units="mm",
+#        device=cairo_pdf)
+```
+
+</br>
+That's all! now you can edit all your pdf plots in Illustrator for your final project.  
+Go ahead with your data analysis and DM me if anything comes up  
+Marta :)  
+
+PS: remember that **chatgpt** and **deepseek** can help you understand and develop code!  
+</br>
