@@ -1,4 +1,4 @@
-# MADD-DC_MRLL_04  
+# ELISAVA-MADD-DC_MRLL_04  
 
 A short introduction to data loading, reshaping, analysis and visualization in R for students at ELISAVA's Master in Data Design (MADD), as part of the Data Collection subject syllabus. 
 
